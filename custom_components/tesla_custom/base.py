@@ -43,6 +43,7 @@ class TeslaCarEntity(TeslaBaseEntity):
         vin = car.vin
         super().__init__(vin, coordinator)
         self._car = car
+        self._car_was_online_before_update = car.is_on
         display_name = car.display_name
         vehicle_name = (
             display_name
@@ -59,6 +60,11 @@ class TeslaCarEntity(TeslaBaseEntity):
         self._last_update_success: bool | None = None
         self.last_update_time: float | None = None
 
+
+    async def async_update(self) -> None:
+        self._car_was_online_before_update = self._car.is_on
+        await super().async_update()
+
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
@@ -69,13 +75,19 @@ class TeslaCarEntity(TeslaBaseEntity):
         current_last_update_time = coordinator.last_update_time
         self._last_update_success = current_last_update_success
         self.last_update_time = current_last_update_time
+
+        force_update = self._car_was_online_before_update and not self._car.is_on
+        self._car_was_online_before_update = self._car.is_on
+
         if (
-            prev_last_update_success == current_last_update_success
+            not force_update
+            and prev_last_update_success == current_last_update_success
             and prev_last_update_time == current_last_update_time
         ):
             # If there was no change in the last update success or time,
             # avoid writing state to prevent unnecessary entity updates.
             return
+
         super()._handle_coordinator_update()
 
     async def update_controller(
